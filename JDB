@@ -1,0 +1,107 @@
+#!/usr/bin/python
+import socket, json, os, crypto, en
+from configparser import ConfigParser, NoSectionError
+dbname = None
+class JDB():
+    def __init__(self):
+        self.config = ConfigParser()
+        self.config.read('/data/data/com.termux/files/usr/etc/JDB/JDB.ini')
+        self.welcome = "Welcome to the JDB cli monitor.\nYour JDB connection with id 1\nServer version: 1.0.0 JDB jdb-server\n\nType help or /h for help. Type /c to clear the current input statement. Type /q or exit to exit."
+        self.help = '\nGeneral information about JDB can be found at \nhttp://jdb.org\n\nList of all client commands:\nNote that all text commands must be first on line.\n\nexit or (/q) Same as quit.\nhelp or (/h) Display the help.\nclear or (/c) Clear the current input statement.\ncommanduse or (/cu) Command help use.\n'
+        try:
+            self.path = self.config.get('config', 'path')
+        except NoSectionError:
+            self.path = 'var/lib/jdb/'
+        try:
+            self.ipaddr = self.config.get('config', 'ipaddr')
+            self.port = int(self.config.get('config', 'port'))
+            self.max_connections = int(self.config.get('config', 'max_connections'))
+        except NoSectionError:
+            self.ipaddr = '127.0.0.1'
+            self.port = 8787
+            self.max_connections = 10
+            print("wasn't found ip address or port or max connections in JDB.ini, that's why ip set to 127.0.0.1 and port to 8787 and max connections to 10")
+        self.jdb_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.jdb_socket.bind((self.ipaddr, self.port))
+        except OSError:
+            print('Address already in use')
+            exit()
+        self.jdb_socket.listen(self.max_connections)
+        print('JDB server was started at {0}:{1}\nto stop press Ctrl+c'.format(self.ipaddr, self.port))
+if __name__ == '__main__':
+     jdb = JDB()
+     while True:
+         try:
+              conn, addr = jdb.jdb_socket.accept()
+              passw = conn.recv(16)
+              st = en.de(passw)
+              conn.send(bytes(str(st), encoding='utf-8'))
+              if st == 0:
+                  conn.close()
+                  continue
+         except KeyboardInterrupt:
+              print('exiting server...')
+              #en.en(passw)
+              conn.close()
+              exit()
+         skey = conn.recv(32)
+         if not skey == b'\xbe\xb16S\xe1\xd1\xda.\xf6\x12_\xacy3@\x93~\xfe\xae|-\xf3\x04FG~j.\xc5|\xe1"':
+             conn.close()
+         else:
+             print('new connection from {}'.format(addr))
+             conn.send(bytes(jdb.welcome, encoding='utf-8'))
+             conn.send(bytes(jdb.help, encoding='utf-8'))
+             while True:
+                 size = conn.recv(2).decode('utf-8')
+                 print(size)
+                 comm = conn.recv(int(size)).decode('utf-8')
+                 comm = str(comm)
+                 print(comm)
+                 if 'use' in comm:
+                     try:
+                        with open(jdb.path+comm[4:]+'.json', 'rb') as f:
+                             pass
+                        conn.send(b'1')
+                        dbname = comm[4:]
+                     except FileNotFoundError:
+                        conn.send(b'0')
+                 elif 'create' in comm:
+                     with open(jdb.path+comm[7:]+'.json', 'w') as f:
+                         f.close()
+                 elif 'put' in comm:
+                      print('here (put)')
+                      data = comm[4:]
+                      print(data)
+                      with open(jdb.path+dbname+'.json', 'w') as f:
+                         f.write(data)
+                 elif comm == 'read':
+                     with open(jdb.path+dbname+'.json', 'rb') as f:
+                         data = f.read()
+                     if int(len(data)) < 10:
+                         s = '0'+str(len(data))
+                     else:
+                         s = str(len(data))
+                     conn.send(bytes(s, encoding='utf-8'))
+                     conn.send(data)
+                 elif 'delete' in comm:
+                      try:
+                          os.remove(jdb.path+comm[7:]+'.json')
+                          conn.send(b'1')
+                      except:
+                          conn.send(b'0')
+                 elif comm == 'all':
+                    ls = os.listdir(jdb.path)
+                    print(ls)
+                    print(bytes(str(ls), encoding='utf-8'))
+                    if int(len(str(ls))) < 10:
+                        s = '0'+str(len(str(ls)))
+                    else:
+                        s = str(len(str(ls)))
+                    print(s)
+                    conn.send(bytes(s, encoding='utf-8'))
+                    conn.send(bytes(str(ls), encoding='utf-8'))
+                 elif comm == 'quit':
+                     conn.close()
+                     en.en(passw)
+                     break

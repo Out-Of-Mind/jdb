@@ -1,0 +1,105 @@
+#!/usr/bin/python
+import os, sys
+import socket
+
+def check(n):
+	try:
+		sys.argv[n]
+		r = True
+	except:
+		r = False
+	finally:
+		return r
+
+import json
+if check(1) and sys.argv[1] == '-p':
+    if check(2):
+        passw = sys.argv[2]
+        if not len(passw) == 16:
+            print('password must be 16 characters long')
+            exit()
+    else:
+        print('enter password to login: jdb -p password')
+        exit()
+else:
+    print('enter password to login: jdb -p password')
+    exit()
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+address_to_server = ('127.0.0.1', 8787) 
+client.connect(address_to_server)
+client.send(bytes(passw, encoding='utf-8'))
+if int(client.recv(1).decode('utf-8')) == 0:
+    print('incorrect password')
+    exit()
+client.send(b'\xbe\xb16S\xe1\xd1\xda.\xf6\x12_\xacy3@\x93~\xfe\xae|-\xf3\x04FG~j.\xc5|\xe1"')
+welcome = client.recv(216).decode('utf-8')
+help = client.recv(304).decode('utf-8')
+print(welcome)
+dbname = 'none'
+
+while True:
+    try:
+        comm = input('JDB  [{}] > '.format(dbname))
+    except EOFError:
+        print('exiting...')
+        client.send(b'4')
+        client.send(b'quit')
+        exit()
+    if len(comm) < 10:
+        size = '0'+str(len(comm))
+    else:
+        size = len(comm)
+    size = bytes(str(size), encoding='utf-8')
+    if comm == 'exit' or comm == '/q':
+        print('exiting...')
+        client.send(b'4')
+        client.send(b'quit')
+        print('here')
+        exit()
+    elif comm == '/c' or comm == 'clear':
+        os.system('clear')
+    elif comm == '/cu' or comm == 'commanduse':
+        print("\nuse test - To change your current collection to test.\nread - To read data from your current collection\ndelete test - To delete test collection\ncreate test - To create test collection\nput {'hi':'hello'} - To put {'hi':'hello:} in your current collection\nall - To see all collections")
+    elif comm == 'help' or comm == '/h':
+        print(help)
+    elif 'create ' in comm:
+            client.send(size)
+            client.send(bytes(comm, encoding='utf-8'))
+    elif 'put ' in comm:
+        client.send(size)
+        client.send(bytes(comm, encoding='utf-8'))
+        print(bytes(comm, encoding='utf-8'))
+        print(bytes(str(len(comm)), encoding='utf-8'))
+    elif 'delete ' in comm:
+        client.send(size)
+        client.send(bytes(comm, encoding='utf-8'))
+        state = b'0'
+        state = client.recv(1)
+        if state == b'1':
+            pass
+        else:
+            print('no collection with this name')
+    elif comm == 'read':
+        client.send(size)
+        client.send(bytes(comm, encoding='utf-8'))
+        s = client.recv(2).decode('utf-8')
+        data = client.recv(int(s)).decode('utf-8')
+        print(data)
+    elif comm == 'all':
+        client.send(size)
+        client.send(bytes(comm, encoding='utf-8'))
+        s = client.recv(2).decode('utf-8')
+        ls = client.recv(int(s)).decode('utf-8')
+        print(ls)
+    elif 'use ' in comm:
+        client.send(size)
+        client.send(bytes(comm, encoding='utf-8'))
+        state = b'0'
+        state = client.recv(1)
+        if state == b'1':
+            dbname = comm[4:]
+        else:
+            print('no collection with this name')
+    else:
+        print('cannot find this command')
